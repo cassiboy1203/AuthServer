@@ -1,3 +1,7 @@
+import com.sun.source.tree.IfTree;
+
+import java.net.Socket;
+
 enum UserStatus{
     Online (0),
     Offline (1),
@@ -49,4 +53,36 @@ public class User {
     public UserRole Role = UserRole.User;
     public String Image;
     public UserStatus status;
+    public boolean IsLoggedIn;
+
+    public Socket Client;
+    public String AuthKey;
+
+    public User(Socket client){
+        this.Client = client;
+    }
+    public User(String email, String pass, Socket client){
+        this.Client = client;
+        CheckLogin(email, pass);
+    }
+    public User(String loginInfo, Socket client){
+        this.Client = client;
+        CheckLoginInfo(loginInfo);
+    }
+    public User(String email, String name, String pass, String image, Socket socket){
+        if (Database.AddUserToDatabase(name, email, pass, UserRole.User, UserStatus.Online, !image.equals("null") ? image : null)){
+
+        }
+    }
+
+    public void CheckLogin(String email, String pass){
+        if (Database.CheckLogin(email, pass, this, Client.getRemoteSocketAddress().toString())){
+            IsLoggedIn = true;
+            System.out.println("User logged in.");
+        }
+    }
+
+    public void CheckLoginInfo(String loginInfo){
+
+    }
 }

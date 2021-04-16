@@ -17,17 +17,23 @@ public class Database {
         }
     }
 
-    public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, String image, UserStatus status){
-        Connection con = null;
-        ResultSet result = null;
+    public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, UserStatus status, String image){
+        Connection con;
 
         try {
             con = ConnectToDatabase();
 
             assert con != null;
-            PreparedStatement pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserImageType, UserStatus) VALUES(?,?,?,?,?,?,?)");
+            PreparedStatement pStatement;
+            if (image != null) {
+                pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserStatus, UserImageType) VALUES(?,?,?,?,?,?,?)");
+                pStatement.setString(7,image);
+            }
+            else {
+                pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserStatus) VALUES(?,?,?,?,?,?)");
+            }
             pStatement.setString(1,name);
-            pStatement.setString(2,,email);
+            pStatement.setString(2,email);
 
             SecureRandom random = new SecureRandom();
             byte[] saltByte = new byte[16];
@@ -39,8 +45,7 @@ public class Database {
             pStatement.setString(3,hashPass);
             pStatement.setString(4,salt);
             pStatement.setInt(5, role.getValue());
-            pStatement.setString(6,image);
-            pStatement.setInt(7,status.getValue());
+            pStatement.setInt(6,status.getValue());
 
             if (pStatement.executeUpdate() != 0) return true;
 
@@ -51,7 +56,7 @@ public class Database {
         return false;
     }
 
-    public static boolean CheckLogin(String email, String pass, User user){
+    public static boolean CheckLogin(String email, String pass, User user, String ip){
         Connection con = null;
         ResultSet result = null;
 
@@ -65,7 +70,8 @@ public class Database {
             result = pStatement.executeQuery();
 
             if (result.first()){
-                if (result.getString("UserPass").equals(HashPass(pass + result.getString("Salt")))){
+                String hashPass = HashPass(pass + result.getString("Salt"));
+                if (result.getString("UserPass").equals(hashPass)){
                     user.Id = result.getInt("UserId");
                     user.Name = result.getString("UserName");
                     user.Email = email;
@@ -75,6 +81,9 @@ public class Database {
 
                     result.close();
                     con.close();
+
+                    int timeStamp = Long.valueOf(System.currentTimeMillis() / 1000L).intValue();
+                    UpdateLoginInfo(timeStamp, user.Id, hashPass, ip);
                     return true;
                 }
                 else {
@@ -95,6 +104,78 @@ public class Database {
             }
             return false;
         }
+        return false;
+    }
+
+    public static boolean CheckLoginInfo(String loginInfo, User user, String ip){
+        Connection con = null;
+        ResultSet result = null;
+
+        try {
+            con = ConnectToDatabase();
+
+            assert con != null;
+            PreparedStatement pStatement = con.prepareStatement("SELECT * FROM Logins l, Users u WHERE LoginString = ? AND u.UserId = l.UserId");
+            pStatement.setString(1, loginInfo);
+            result = pStatement.executeQuery();
+
+            if (result.first()){
+                if (result.getString("LastLoginLocation") == ip){
+                    user.Id = result.getInt("UserId");
+                    user.Name = result.getString("UserName");
+                    user.Email = result.getString("User");
+                    user.Image = user.Id + result.getString("UserImageType");
+                    user.Role.setValue(result.getInt("UserRole"));
+                    user.status.setValue(result.getInt("UserStatus"));
+
+                    return true;
+                }
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+
+        return false;
+    }
+
+    public static boolean UpdateLoginInfo(int timestamp, int userId, String pass, String ip){
+        Connection con = null;
+        ResultSet result = null;
+
+        try {
+            con = ConnectToDatabase();
+
+            assert con != null;
+            PreparedStatement pStatement = con.prepareStatement("SELECT * FROM Logins WHERE UserId = ? AND IsLoggedIn = 1");
+            pStatement.setInt(1,userId);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                pStatement = con.prepareStatement("UPDATE Logins Set IsLoggedIn = 0 WHERE LoginId = ?");
+                pStatement.setInt(1, result.getInt("LoginId"));
+                pStatement.executeUpdate();
+            }
+
+            result.close();
+
+            pStatement = con.prepareStatement("INSERT INTO Logins(LoginTimeStamp, IsLoggedIn, UserId, LoginString, LastLoginLocation) VALUES(?,1,?,?,?)");
+            pStatement.setInt(1,timestamp);
+            pStatement.setInt(2,userId);
+            pStatement.setString(3,HashPass(Integer.toString(timestamp) + Integer.toString(userId) + pass));
+            pStatement.setString(4,ip);
+            if (pStatement.executeUpdate() != 0) return true;
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+            try {
+                result.close();
+                con.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
         return false;
     }
 
