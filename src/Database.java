@@ -17,21 +17,14 @@ public class Database {
         }
     }
 
-    public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, UserStatus status, String image){
+    public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, UserStatus status){
         Connection con;
 
         try {
             con = ConnectToDatabase();
 
             assert con != null;
-            PreparedStatement pStatement;
-            if (image != null) {
-                pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserStatus, UserImageType) VALUES(?,?,?,?,?,?,?)");
-                pStatement.setString(7,image);
-            }
-            else {
-                pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserStatus) VALUES(?,?,?,?,?,?)");
-            }
+            PreparedStatement pStatement = con.prepareStatement("INSERT INTO Users(UserName, UserEmail, UserPass, Salt, UserRole, UserStatus) VALUES(?,?,?,?,?,?)");
             pStatement.setString(1,name);
             pStatement.setString(2,email);
 
@@ -120,7 +113,7 @@ public class Database {
             result = pStatement.executeQuery();
 
             if (result.first()){
-                if (result.getString("LastLoginLocation") == ip){
+                if (result.getString("LastLoginLocation").equals(ip)){
                     user.Id = result.getInt("UserId");
                     user.Name = result.getString("UserName");
                     user.Email = result.getString("User");
@@ -169,6 +162,7 @@ public class Database {
         } catch (SQLException throwables) {
             throwables.printStackTrace();
             try {
+                assert result != null;
                 result.close();
                 con.close();
             } catch (SQLException e) {

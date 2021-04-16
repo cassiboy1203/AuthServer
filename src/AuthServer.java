@@ -1,14 +1,20 @@
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 
 enum ActionCodes {
-    InvalidAction(0xFF),
     None(0x00),
-    Login(0x01),
-    LoginInfo(0x02),
-    NewUser(0x03);
+    Connect(0x01),
+    Login(0x02),
+    LoginInfo(0x03),
+    NewUser(0x04),
+    Logout(0x05),
+
+    ;
 
     private int value;
 
@@ -25,11 +31,40 @@ enum ActionCodes {
     }
 }
 
+enum ReplyCodes {
+    InvalidAction(0x00),
+    InvalidKey(0x01),
+    ConnectionSuccessful(0x02),
+    ConnectionFailed(0x03),
+    LoginSuccessful(0x04),
+    LoginFailed(0x05),
+    UserCreate(0x06),
+    EmailInUse(0x07),
+    UserLoggedOut(0x08),
+
+    ;
+    private int value;
+
+    ReplyCodes(int value) {
+        this.value = value;
+    }
+
+    public void setValue(int value) {
+        this.value = value;
+    }
+
+    public int getValue() {
+        return value;
+    }
+}
+
 public class AuthServer {
     public static ServerSocket serverSocket;
     public static int ServerPort = 61234;
 
-    public static void OpenServer(){
+    public static ArrayList<User> users = null;
+
+    public static void OpenServer() {
         try {
             serverSocket = new ServerSocket(ServerPort);
         } catch (IOException e) {
@@ -39,20 +74,18 @@ public class AuthServer {
         AcceptConnection();
     }
 
-    public static void AcceptConnection(){
+    public static void AcceptConnection() {
         try {
+            Socket socket = serverSocket.accept();
             Thread serverThread = new Thread(AuthServer::AcceptConnection);
             serverThread.start();
-
-            Socket socket = serverSocket.accept();
+            String data = null;
             InputStream input = socket.getInputStream();
             InputStreamReader reader = new InputStreamReader(input);
 
-            int character;
-            StringBuilder data = new StringBuilder();
-
-            while ((character = reader.read()) != -1){
-                data.append((char) character);
+            BufferedReader bReader = new BufferedReader(reader);
+            while (bReader.ready()) {
+                data = bReader.readLine();
             }
 
             String[] splitString = data.toString().split(",");
@@ -60,31 +93,14 @@ public class AuthServer {
             ActionCodes action = ActionCodes.None;
             action.setValue(Integer.parseInt(splitString[0]));
 
-            User user = null;
-            switch (action){
-                case None:
-                    OutputStream out = socket.getOutputStream();
-
-                    byte[] outData;
-                    String message = String.format("{}, Invalid Action", Integer.toHexString(ActionCodes.InvalidAction.getValue()));
-
-                    outData = message.getBytes(StandardCharsets.UTF_8);
-                    out.write(outData);
-
-                    PrintWriter writer = new PrintWriter(out, true);
-                    break;
-                case Login:
-                    user = new User(splitString[1], splitString[2], socket);
-                    break;
-                case LoginInfo:
-                    user = new User(splitString[1], socket);
-                    break;
-                case NewUser:
-                    user = new User(splitString[1], splitString[2], splitString[3], splitString[4], socket);
-                    break;
+            if (action == ActionCodes.Connect){
+                User user = new User(socket, users);
             }
+
+
         } catch (IOException e) {
             e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 }
