@@ -1,59 +1,58 @@
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 
 enum ActionCodes {
-    None(0x00),
-    Connect(0x01),
-    Login(0x02),
-    LoginInfo(0x03),
-    NewUser(0x04),
-    Logout(0x05),
+    None((byte) 0x00),
+    Connect((byte) 0x01),
+    Login((byte) 0x02),
+    LoginInfo((byte) 0x03),
+    NewUser((byte) 0x04),
+    Logout((byte) 0x05),
 
     ;
 
-    private int value;
+    private byte value;
 
-    ActionCodes(int value) {
+    ActionCodes(byte value) {
         this.value = value;
     }
 
-    public void setValue(int value) {
+    public void setValue(byte value) {
         this.value = value;
     }
 
-    public int getValue() {
+    public byte getValue() {
         return value;
     }
 }
 
 enum ReplyCodes {
-    InvalidAction(0x00),
-    InvalidKey(0x01),
-    ConnectionSuccessful(0x02),
-    ConnectionFailed(0x03),
-    LoginSuccessful(0x04),
-    LoginFailed(0x05),
-    UserCreate(0x06),
-    EmailInUse(0x07),
-    UserLoggedOut(0x08),
+    InvalidAction((byte) 0x00),
+    InvalidKey((byte) 0x01),
+    ConnectionSuccessful((byte) 0x02),
+    ConnectionFailed((byte) 0x03),
+    LoginSuccessful((byte) 0x04),
+    LoginFailed((byte) 0x05),
+    UserCreate((byte) 0x06),
+    EmailInUse((byte) 0x07),
+    UserLoggedOut((byte) 0x08),
 
     ;
-    private int value;
+    private byte value;
 
-    ReplyCodes(int value) {
+    ReplyCodes(byte value) {
         this.value = value;
     }
 
-    public void setValue(int value) {
+    public void setValue(byte value) {
         this.value = value;
     }
 
-    public int getValue() {
+    public byte getValue() {
         return value;
     }
 }
@@ -79,24 +78,24 @@ public class AuthServer {
             Socket socket = serverSocket.accept();
             Thread serverThread = new Thread(AuthServer::AcceptConnection);
             serverThread.start();
-            String data = null;
             InputStream input = socket.getInputStream();
-            InputStreamReader reader = new InputStreamReader(input);
-
-            BufferedReader bReader = new BufferedReader(reader);
-            while (bReader.ready()) {
-                data = bReader.readLine();
-            }
-
-            String[] splitString = data.toString().split(",");
+            byte[] buffer = new byte[1];
+            input.read(buffer, 0, 1);
 
             ActionCodes action = ActionCodes.None;
-            action.setValue(Integer.parseInt(splitString[0]));
+            action.setValue(buffer[0]);
 
             if (action == ActionCodes.Connect){
                 User user = new User(socket, users);
-            }
+            } else {
+                buffer = new byte[1];
+                buffer[0] = ReplyCodes.InvalidAction.getValue();
 
+                OutputStream out = socket.getOutputStream();
+                out.write(buffer);
+
+                socket.close();
+            }
 
         } catch (IOException e) {
             e.printStackTrace();

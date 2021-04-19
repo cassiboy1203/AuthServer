@@ -1,4 +1,6 @@
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -58,16 +60,13 @@ public class User {
     public boolean IsLoggedIn;
 
     public Socket Client;
-    public String AuthKey;
+    public byte[] AuthKey;
 
     private ArrayList<User> users;
 
     public User(Socket client, ArrayList<User> users){
         this.Client = client;
-
-        String message = String.format("{0},", ReplyCodes.ConnectionSuccessful.getValue());
-
-        SendReply(message);
+        SendReply(ReplyCodes.ConnectionSuccessful.getValue());
 
         AuthServer.users.add(this);
         this.users = users;
@@ -79,46 +78,52 @@ public class User {
         while (true) {
             try {
                 InputStream input = Client.getInputStream();
-                InputStreamReader reader = new InputStreamReader(input);
-
-                BufferedReader bReader = new BufferedReader(reader);
-
-                while (bReader.ready()){
-                    String[] buffer = bReader.readLine().split(",");
-
-                    if (AuthKey == buffer[0]) {
-                        ActionCodes action = ActionCodes.None;
-                        action.setValue(Integer.parseInt(buffer[1]));
-                        if (!IsLoggedIn) {
-                            switch (action) {
-                                case Login:
-                                    CheckLogin(buffer[2], buffer[3]);
-                                    break;
-                                case LoginInfo:
-                                    CheckLoginInfo(buffer[2]);
-                                    break;
-                                case NewUser:
-                                    CreateUser(buffer[2], buffer[3], buffer[4]);
-                                    break;
-                                case None:
-                                default:
-                                    SendReply(Integer.toHexString(ReplyCodes.InvalidAction.getValue()));
-                            }
-                        } else {
-                            switch (action){
-                                case None:
-                                default:
-                                    SendReply(Integer.toHexString(ReplyCodes.InvalidAction.getValue()));
-                            }
-                        }
-                    }
-                    else {
-                        SendReply(Integer.toHexString(ReplyCodes.InvalidKey.getValue()));
-                    }
+                byte[] authKey = new byte[16];
+                byte[] actionCode = new byte[1];
+                byte[] messageLengthByte = new byte[4];
+                int messageLength;
+                input.read(authKey, 0, 16);
+                input.read(actionCode, 0, 1);
+                input.read(messageLengthByte, 0 ,4);
+                messageLength = FromByteArray(messageLengthByte);
+                byte[] buffer = new byte[messageLength];
+                int count = 0;
+                int length;
+                while ((length = input.read(buffer, count, messageLength)) != -1){
+                    count += length;
                 }
 
+                if (AuthKey.equals(authKey)) {
+                    ActionCodes action = ActionCodes.None;
+                    action.setValue(actionCode[0]);
+                    String[] message = new String(buffer, StandardCharsets.UTF_8).split(",");
+                    if (!IsLoggedIn) {
+                        switch (action) {
+                            case Login:
+                                CheckLogin(message[0], message[1]);
+                                break;
+                            case LoginInfo:
+                                CheckLoginInfo(message[0]);
+                                break;
+                            case NewUser:
+                                CreateUser(message[0], message[1], message[2]);
+                                break;
+                            case None:
+                            default:
+                                SendReply(ReplyCodes.InvalidAction.getValue());
+                        }
+                    } else {
+                        switch (action) {
+                            case None:
+                            default:
+                                SendReply(ReplyCodes.InvalidAction.getValue());
+                        }
+                    }
+                } else {
+                    SendReply(ReplyCodes.InvalidKey.getValue());
+                }
             } catch (IOException e) {
-                e.printStackTrace();
+                    e.printStackTrace();
             }
         }
     }
@@ -126,9 +131,9 @@ public class User {
     private void CheckLogin(String email, String pass){
         if (Database.CheckLogin(email, pass, this, Client.getRemoteSocketAddress().toString())){
             IsLoggedIn = true;
-            SendReply(Integer.toHexString(ReplyCodes.LoginSuccessful.getValue()));
+            SendReply(ReplyCodes.LoginSuccessful.getValue());
         } else {
-            SendReply(Integer.toHexString(ReplyCodes.LoginFailed.getValue()));
+            SendReply(ReplyCodes.LoginFailed.getValue());
         }
     }
 
@@ -138,17 +143,23 @@ public class User {
 
     private void CreateUser(String email, String pass, String name){
         if (Database.AddUserToDatabase(name,email,pass, UserRole.User, UserStatus.Offline)){
-            SendReply(Integer.toHexString(ReplyCodes.UserCreate.getValue()));
+            SendReply(ReplyCodes.UserCreate.getValue());
         }else {
-            SendReply(Integer.toHexString(ReplyCodes.EmailInUse.getValue()));
+            SendReply(ReplyCodes.EmailInUse.getValue());
         }
     }
 
-    private void SendReply(String message){
+    private void SendReply(byte action){
+        byte[] buffer = new byte[1];
+        buffer[0] = action;
+        SendReply(buffer, 1);
+    }
+
+    private void SendReply(byte[] message, int messageLength){
         try {
-            message = message + (this.AuthKey = GenerateAuthKey(users));
-            byte[] buffer;
-            buffer = message.getBytes(StandardCharsets.UTF_8);
+            byte[] buffer = new byte[messageLength + 16];
+            System.arraycopy(message, 0, buffer, 0, messageLength);
+            System.arraycopy(GenerateAuthKey(), 0, buffer, messageLength, 16);
 
             OutputStream out = Client.getOutputStream();
             out.write(buffer);
@@ -158,15 +169,14 @@ public class User {
 
     }
 
-    private String GenerateAuthKey(ArrayList<User> users){
+    private byte[] GenerateAuthKey(){
         while (true) {
             byte[] buffer = new byte[16];
             new Random().nextBytes(buffer);
-            String key = new String(buffer, StandardCharsets.UTF_8);
 
             boolean isUnique = true;
             for (User user : users) {
-                if (user.AuthKey == key) {
+                if (user.AuthKey == buffer) {
                     isUnique = false;
                     break;
                 }
@@ -175,7 +185,14 @@ public class User {
             if (!isUnique){
                 continue;
             }
-            return key;
+            return buffer;
         }
+    }
+
+    private int FromByteArray(byte[] bytes) {
+        return ((bytes[0] & 0xFF) << 24) |
+                ((bytes[1] & 0xFF) << 16) |
+                ((bytes[2] & 0xFF) << 8 ) |
+                ((bytes[3] & 0xFF) << 0 );
     }
 }
