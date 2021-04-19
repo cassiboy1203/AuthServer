@@ -4,6 +4,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
 
 enum UserStatus{
@@ -86,41 +87,41 @@ public class User {
                 input.read(actionCode, 0, 1);
                 input.read(messageLengthByte, 0 ,4);
                 messageLength = FromByteArray(messageLengthByte);
-                byte[] buffer = new byte[messageLength];
-                int count = 0;
-                int length;
-                while ((length = input.read(buffer, count, messageLength)) != -1){
-                    count += length;
-                }
+                byte[] buffer;
+                buffer = ReadMessage(messageLength, input);
+                if (buffer == null){
+                    SendReply(ReplyCodes.InvalidArgs.getValue());
+                } else {
 
-                if (AuthKey.equals(authKey)) {
-                    ActionCodes action = ActionCodes.None;
-                    action.setValue(actionCode[0]);
-                    String[] message = new String(buffer, StandardCharsets.UTF_8).split(",");
-                    if (!IsLoggedIn) {
-                        switch (action) {
-                            case Login:
-                                CheckLogin(message[0], message[1]);
-                                break;
-                            case LoginInfo:
-                                CheckLoginInfo(message[0]);
-                                break;
-                            case NewUser:
-                                CreateUser(message[0], message[1], message[2]);
-                                break;
-                            case None:
-                            default:
-                                SendReply(ReplyCodes.InvalidAction.getValue());
+                    if (Arrays.equals(AuthKey, authKey)) {
+                        ActionCodes action = ActionCodes.None;
+                        action.setValue(actionCode[0]);
+                        String[] message = new String(buffer, StandardCharsets.UTF_8).split(",");
+                        if (!IsLoggedIn) {
+                            switch (action) {
+                                case Login:
+                                    CheckLogin(message[0], message[1]);
+                                    break;
+                                case LoginInfo:
+                                    CheckLoginInfo(message[0]);
+                                    break;
+                                case NewUser:
+                                    CreateUser(message[0], message[1], message[2]);
+                                    break;
+                                case None:
+                                default:
+                                    SendReply(ReplyCodes.InvalidAction.getValue());
+                            }
+                        } else {
+                            switch (action) {
+                                case None:
+                                default:
+                                    SendReply(ReplyCodes.InvalidAction.getValue());
+                            }
                         }
                     } else {
-                        switch (action) {
-                            case None:
-                            default:
-                                SendReply(ReplyCodes.InvalidAction.getValue());
-                        }
+                        SendReply(ReplyCodes.InvalidKey.getValue());
                     }
-                } else {
-                    SendReply(ReplyCodes.InvalidKey.getValue());
                 }
             } catch (IOException e) {
                     e.printStackTrace();
@@ -194,5 +195,36 @@ public class User {
                 ((bytes[1] & 0xFF) << 16) |
                 ((bytes[2] & 0xFF) << 8 ) |
                 ((bytes[3] & 0xFF) << 0 );
+    }
+
+    private byte[] ReadMessage(int messageLength, InputStream input){
+        try {
+            byte[] buffer = new byte[messageLength];
+            int pointer = 0;
+
+            while (pointer < messageLength){
+                int count;
+                while ((count = input.read(buffer, pointer, 1024)) != -1){
+                    pointer += count;
+                }
+
+                input = Client.getInputStream();
+            }
+
+            return buffer;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private byte[] BuildReplyMessage(byte replyCode, String text){
+        byte[] buffer = new byte[text.length() + 1];
+        buffer[0] = replyCode;
+        byte[] message = text.getBytes(StandardCharsets.UTF_8);
+
+        System.arraycopy(message, 0, buffer, 1, message.length);
+
+        return buffer;
     }
 }

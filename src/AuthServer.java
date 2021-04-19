@@ -33,13 +33,14 @@ enum ActionCodes {
 enum ReplyCodes {
     InvalidAction((byte) 0x00),
     InvalidKey((byte) 0x01),
-    ConnectionSuccessful((byte) 0x02),
-    ConnectionFailed((byte) 0x03),
-    LoginSuccessful((byte) 0x04),
-    LoginFailed((byte) 0x05),
-    UserCreate((byte) 0x06),
-    EmailInUse((byte) 0x07),
-    UserLoggedOut((byte) 0x08),
+    InvalidArgs((byte) 0x02),
+    ConnectionSuccessful((byte) 0x03),
+    ConnectionFailed((byte) 0x04),
+    LoginSuccessful((byte) 0x05),
+    LoginFailed((byte) 0x06),
+    UserCreate((byte) 0x07),
+    EmailInUse((byte) 0x08),
+    UserLoggedOut((byte) 0x09),
 
     ;
     private byte value;
