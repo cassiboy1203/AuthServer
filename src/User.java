@@ -100,6 +100,11 @@ public class User {
                         if (!IsLoggedIn) {
                             switch (action) {
                                 case Login:
+                                    if (message.length > 2) {
+                                        status.setValue(Integer.parseInt(message[2]));
+                                    } else {
+                                        status = UserStatus.Online;
+                                    }
                                     CheckLogin(message[0], message[1]);
                                     break;
                                 case LoginInfo:
@@ -151,17 +156,25 @@ public class User {
     }
 
     private void SendReply(byte action){
-        byte[] buffer = new byte[1];
+        byte[] buffer = new byte[17];
         buffer[0] = action;
-        SendReply(buffer, 1);
+        System.arraycopy(GenerateAuthKey(), 0, buffer, 1, 16);
+        SendReply(buffer);
     }
 
-    private void SendReply(byte[] message, int messageLength){
-        try {
-            byte[] buffer = new byte[messageLength + 16];
-            System.arraycopy(message, 0, buffer, 0, messageLength);
-            System.arraycopy(GenerateAuthKey(), 0, buffer, messageLength, 16);
+    private void SendReply(byte replyCode, String text){
+        byte[] buffer = new byte[text.length() + 5];
+        buffer[0] = replyCode;
+        byte[] message = text.getBytes(StandardCharsets.UTF_8);
+        byte[] messageLength = ToByteArray(message.length);
+        System.arraycopy(messageLength, 0, buffer, 17, 4);
+        System.arraycopy(message, 0, buffer, 22, message.length);
+        System.arraycopy(GenerateAuthKey(), 0, buffer, 1, 16);
+        SendReply(buffer);
+    }
 
+    private void SendReply(byte[] buffer){
+        try {
             OutputStream out = Client.getOutputStream();
             out.write(buffer);
         } catch (IOException e) {
@@ -197,6 +210,14 @@ public class User {
                 ((bytes[3] & 0xFF) << 0 );
     }
 
+    byte[] ToByteArray(int value) {
+        return new byte[] {
+                (byte)(value >> 24),
+                (byte)(value >> 16),
+                (byte)(value >> 8),
+                (byte)value };
+    }
+
     private byte[] ReadMessage(int messageLength, InputStream input){
         try {
             byte[] buffer = new byte[messageLength];
@@ -216,15 +237,5 @@ public class User {
             e.printStackTrace();
         }
         return null;
-    }
-
-    private byte[] BuildReplyMessage(byte replyCode, String text){
-        byte[] buffer = new byte[text.length() + 1];
-        buffer[0] = replyCode;
-        byte[] message = text.getBytes(StandardCharsets.UTF_8);
-
-        System.arraycopy(message, 0, buffer, 1, message.length);
-
-        return buffer;
     }
 }

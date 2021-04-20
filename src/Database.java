@@ -77,6 +77,7 @@ public class Database {
 
                     int timeStamp = Long.valueOf(System.currentTimeMillis() / 1000L).intValue();
                     UpdateLoginInfo(timeStamp, user.Id, hashPass, ip);
+                    UpdateUserStatus(user.Id, user.status);
                     return true;
                 }
                 else {
@@ -121,6 +122,7 @@ public class Database {
                     user.Role.setValue(result.getInt("UserRole"));
                     user.status.setValue(result.getInt("UserStatus"));
 
+                    UpdateUserStatus(user.Id, user.status);
                     return true;
                 }
             }
@@ -170,6 +172,25 @@ public class Database {
             }
         }
 
+        return false;
+    }
+
+    public static boolean UpdateUserStatus(int id, UserStatus status){
+        Connection con = null;
+
+        try {
+            con = ConnectToDatabase();
+
+            assert con != null;
+            PreparedStatement pStatement = con.prepareStatement("UPDATE Users SET status = ? WHERE UserId = ?");
+            pStatement.setInt(1, status.getValue());
+            pStatement.setInt(2, id);
+            pStatement.executeUpdate();
+
+            return true;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
         return false;
     }
 
