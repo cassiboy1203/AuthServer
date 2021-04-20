@@ -21,8 +21,13 @@ enum ActionCodes {
         this.value = value;
     }
 
-    public void setValue(byte value) {
-        this.value = value;
+    public static ActionCodes fromValue(byte value){
+        for (ActionCodes codes : values()){
+            if (codes.getValue() == value){
+                return codes;
+            }
+        }
+        return null;
     }
 
     public byte getValue() {
@@ -49,8 +54,13 @@ enum ReplyCodes {
         this.value = value;
     }
 
-    public void setValue(byte value) {
-        this.value = value;
+    public static ReplyCodes fromValue(byte value){
+        for (ReplyCodes codes : values()){
+            if (codes.getValue() == value){
+                return codes;
+            }
+        }
+        return null;
     }
 
     public byte getValue() {
@@ -59,10 +69,11 @@ enum ReplyCodes {
 }
 
 public class AuthServer {
+
     public static ServerSocket serverSocket;
     public static int ServerPort = 61234;
 
-    public static ArrayList<User> users = null;
+    public static ArrayList<User> users = new ArrayList<User>();
 
     public static void OpenServer() {
         try {
@@ -83,8 +94,7 @@ public class AuthServer {
             byte[] buffer = new byte[1];
             input.read(buffer, 0, 1);
 
-            ActionCodes action = ActionCodes.None;
-            action.setValue(buffer[0]);
+            ActionCodes action = ActionCodes.fromValue(buffer[0]);
 
             if (action == ActionCodes.Connect){
                 User user = new User(socket, users);

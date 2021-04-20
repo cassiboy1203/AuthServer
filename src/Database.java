@@ -69,8 +69,8 @@ public class Database {
                     user.Name = result.getString("UserName");
                     user.Email = email;
                     user.Image = user.Id + result.getString("UserImageType");
-                    user.Role.setValue(result.getInt("UserRole"));
-                    user.status.setValue(result.getInt("UserStatus"));
+                    user.Role = UserRole.fromValue(result.getByte("UserRole"));
+                    user.status = UserStatus.fromValue(result.getByte("UserStatus"));
 
                     result.close();
                     con.close();
@@ -119,8 +119,8 @@ public class Database {
                     user.Name = result.getString("UserName");
                     user.Email = result.getString("User");
                     user.Image = user.Id + result.getString("UserImageType");
-                    user.Role.setValue(result.getInt("UserRole"));
-                    user.status.setValue(result.getInt("UserStatus"));
+                    user.Role = UserRole.fromValue(result.getByte("UserRole"));
+                    user.status = UserStatus.fromValue(result.getByte("UserStatus"));
 
                     UpdateUserStatus(user.Id, user.status);
                     return true;
