@@ -5,6 +5,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 
+// the codes of the actions that can be executed.
 enum ActionCodes {
     None((byte) 0x00),
     Connect((byte) 0x01),
@@ -35,6 +36,7 @@ enum ActionCodes {
     }
 }
 
+// the codes that get send back.
 enum ReplyCodes {
     InvalidAction((byte) 0x00),
     InvalidKey((byte) 0x01),
@@ -75,6 +77,7 @@ public class AuthServer {
 
     public static ArrayList<User> users = new ArrayList<User>();
 
+    // opens the server.
     public static void OpenServer() {
         try {
             serverSocket = new ServerSocket(ServerPort);
@@ -85,18 +88,24 @@ public class AuthServer {
         AcceptConnection();
     }
 
+    // accepts new connections.
     public static void AcceptConnection() {
         try {
+            // waits for a new user to connect.
             Socket socket = serverSocket.accept();
+            // starts new thread to allow multiple users to connect.
             Thread serverThread = new Thread(AuthServer::AcceptConnection);
             serverThread.start();
+            // reads the action to be executed.
             InputStream input = socket.getInputStream();
             byte[] buffer = new byte[1];
             input.read(buffer, 0, 1);
 
             ActionCodes action = ActionCodes.fromValue(buffer[0]);
 
+            // checks if the action code send = connect.
             if (action == ActionCodes.Connect){
+                // connects the user.
                 User user = new User(socket, users);
             } else {
                 buffer = new byte[1];
