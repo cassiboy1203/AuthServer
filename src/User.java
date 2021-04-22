@@ -1,8 +1,10 @@
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Random;
 
 // The status of the user
@@ -13,7 +15,7 @@ enum UserStatus {
     Dnd((byte) 3),
     Invisible((byte) 4);
 
-    private byte value;
+    private final byte value;
 
     UserStatus(byte value) {
         this.value = value;
@@ -69,11 +71,13 @@ public class User {
     public String Image;
     public UserStatus Status;
     public boolean IsLoggedIn;
+    public String FriendCode;
+    public String UserToken;
 
     public Socket Client;
     public byte[] AuthKey;
 
-    private ArrayList<User> users;
+    private final ArrayList<User> users;
 
     public User(Socket client, ArrayList<User> users) {
         this.Client = client;
@@ -96,17 +100,19 @@ public class User {
                 byte[] actionCode = new byte[1];
                 byte[] messageLengthByte = new byte[4];
                 int messageLength;
+                byte[] buffer;
                 // reads the header of the tcp message.
                 if (input.read(authKey, 0, 16) != 16) continue;
                 input.read(actionCode, 0, 1);
                 input.read(messageLengthByte, 0, 4);
                 // converts the read bytes of the length to a integer
                 messageLength = FromByteArray(messageLengthByte);
-                byte[] buffer;
                 // reads the message send
-                buffer = ReadMessage(messageLength, input);
+                if (messageLength > 0) buffer = ReadMessage(messageLength, input);
+                else buffer = null;
+
                 // if no action was given
-                if (buffer == null) {
+                if (buffer == null && messageLength > 0) {
                     SendReply(ReplyCodes.InvalidArgs.getValue());
                 } else {
                     // checks if a valid key was send.
@@ -114,41 +120,49 @@ public class User {
                         ActionCodes action = ActionCodes.fromValue(actionCode[0]);
 
                         // converts the messages into a string array.
-                        String[] messages = ExtractMessage(buffer);
+                        assert buffer != null;
+                        String[] messages = null;
+                        if (buffer != null) messages = ExtractMessage(buffer);
 
                         // the actions when not logged in.
                         if (!IsLoggedIn) {
                             // checks what action needs to be executed.
-                            switch (action) {
-                                case Login:
+                            switch (Objects.requireNonNull(action)) {
+                                case Login -> {
                                     // if a different status than online has been send.
-                                    if (messages.length > 2) {
-                                        Status = UserStatus.fromValue(Byte.parseByte(messages[2]));
-                                    } else {
-                                        Status = UserStatus.Online;
-                                    }
+                                    Status = messages.length > 2 ? UserStatus.fromValue(Byte.parseByte(messages[2])) : UserStatus.Online;
                                     // checks if there is a valid login.
                                     CheckLogin(messages[0], messages[1]);
-                                    break;
-                                case LoginInfo:
-                                    // checks if the login key is valid.
-                                    CheckLoginInfo(messages[0]);
-                                    break;
-                                case NewUser:
-                                    // creates a new user.
-                                    CreateUser(messages[0], messages[1], messages[2]);
-                                    break;
-                                case None:
-                                default:
-                                    // if the action send was not valid.
-                                    SendReply(ReplyCodes.InvalidAction.getValue());
+                                }
+                                case LoginInfo ->
+                                        // checks if the login key is valid.
+                                        {
+                                            Status = messages.length > 2 ? UserStatus.fromValue(Byte.parseByte(messages[2])) : UserStatus.Online;
+                                            CheckLoginInfo(messages[0], messages[1]);
+                                        }
+                                case NewUser ->
+                                        // creates a new user.
+                                        CreateUser(messages[0], messages[1], messages[2]);
+                                case Disconnect -> {
+                                    SendReply(ReplyCodes.Confirm.getValue());
+                                    return;
+                                }
+                                default ->
+                                        // if the action send was not valid.
+                                        SendReply(ReplyCodes.InvalidAction.getValue());
                             }
                         } else {
-                            switch (action) {
-                                case None:
-                                default:
-                                    // if the action send was not valid.
-                                    SendReply(ReplyCodes.InvalidAction.getValue());
+                            switch (Objects.requireNonNull(action)) {
+                                case Disconnect -> {
+                                    SendReply(ReplyCodes.Confirm.getValue());
+                                    return;
+                                }
+                                case Logout -> {
+
+                                }
+                                default ->
+                                        // if the action send was not valid.
+                                        SendReply(ReplyCodes.InvalidAction.getValue());
                             }
                         }
                     } else {
@@ -159,19 +173,26 @@ public class User {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                if (Client != null) Client.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     // checks if login is valid.
     private void CheckLogin(String email, String pass) {
-        if (Database.CheckLogin(email, pass, this, Client.getRemoteSocketAddress().toString())) {
+        if (Database.CheckLogin(email, pass, this)) {
             // updates the login info in the database.
             int timeStamp = Long.valueOf(System.currentTimeMillis() / 1000L).intValue();
             String loginToken = Database.GenerateLoginToken().get();
             String loginHash = Database.HashPass(loginToken, Integer.toString(timeStamp)).get();
-            Database.UpdateLoginInfo(timeStamp, Id, loginHash, Client.getRemoteSocketAddress().toString());
+            String ip = (((InetSocketAddress) Client.getRemoteSocketAddress()).getAddress()).toString().replace("/","");
+            Database.UpdateLoginInfo(timeStamp, Id, loginHash, ip);
             IsLoggedIn = true;
-            SendReply(ReplyCodes.LoginSuccessful.getValue(), Integer.toString(Id), Name, Integer.toString(Role.getValue()), loginToken, Integer.toString(timeStamp));
+            SendReply(ReplyCodes.LoginSuccessful.getValue(), FriendCode, Name, Integer.toString(Role.getValue()), loginToken, UserToken);
         } else {
             SendReply(ReplyCodes.LoginFailed.getValue());
         }
@@ -179,8 +200,13 @@ public class User {
     }
 
     // checks if the login key is valid.
-    private void CheckLoginInfo(String loginInfo) {
-
+    private void CheckLoginInfo(String loginToken, String userToken) {
+        String ip = (((InetSocketAddress) Client.getRemoteSocketAddress()).getAddress()).toString().replace("/","");
+        if (Database.CheckLoginInfo(loginToken, userToken, this, ip)) {
+            SendReply(ReplyCodes.LoginSuccessful.getValue(), userToken, Name, Email, Integer.toString(Role.getValue()), FriendCode) ;
+        } else {
+            SendReply(ReplyCodes.LoginFailed.getValue());
+        }
     }
 
     // creates a new user.
@@ -253,7 +279,7 @@ public class User {
 
     // converts a byte array to int.
     private int FromByteArray(byte[] bytes) {
-        return ((bytes[0] & 0xFF) << 0) |
+        return ((bytes[0] & 0xFF)) |
                 ((bytes[1] & 0xFF) << 8) |
                 ((bytes[2] & 0xFF) << 16) |
                 ((bytes[3] & 0xFF) << 24);
@@ -262,7 +288,7 @@ public class User {
     // converts a int into a byte array.
     byte[] ToByteArray(int value) {
         return new byte[]{
-                (byte) (value >> 0),
+                (byte) (value),
                 (byte) (value >> 8),
                 (byte) (value >> 16),
                 (byte) (value >> 24)};
@@ -291,7 +317,7 @@ public class User {
     // converts the buffer to a string array.
     private String[] ExtractMessage(byte[] message) {
         int pointer = 0;
-        ArrayList<String> values = new ArrayList<String>();
+        ArrayList<String> values = new ArrayList<>();
         while (pointer < message.length) {
             String value;
             byte[] length = new byte[4];
@@ -312,15 +338,15 @@ public class User {
     }
 
     // builds the message to be send back by turning the strings to bytes.
-    private byte[] BuildReplyMessage(String... args){
+    private byte[] BuildReplyMessage(String... args) {
         int count = 0;
-        for (String arg: args) {
+        for (String arg : args) {
             count += arg.length() + 4;
         }
 
         byte[] buffer = new byte[count];
         int pointer = 0;
-        for (String arg : args){
+        for (String arg : args) {
             byte[] length = ToByteArray(arg.length());
             byte[] message = arg.getBytes(StandardCharsets.UTF_8);
             System.arraycopy(length, 0, buffer, pointer, 4);
