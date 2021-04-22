@@ -4,14 +4,6 @@ public class Main {
         //Database.AddUserToDatabase("Dev1", "dev1@chatserver.com", "Dev1Pass", UserRole.Dev, UserStatus.Offline);
         Thread t = new Thread(AuthServer::OpenServer);
         t.start();
-        Main object = new Main();
-        object.waitMethod();
-    }
-
-    // makes sure the application is kept alive.
-    private synchronized void waitMethod() throws InterruptedException {
-        while (true){
-            this.wait(2000);
-        }
+        while (true) Thread.sleep(100000);
     }
 }
