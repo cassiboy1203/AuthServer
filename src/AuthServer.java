@@ -15,6 +15,8 @@ enum ActionCodes {
     Logout((byte) 0x05),
     Disconnect((byte) 0x06),
     AddFriend((byte) 0x07),
+    GetFriends((byte) 0x08),
+    GetFriendRequest((byte) 0x09),
 
     ;
 
@@ -53,6 +55,8 @@ enum ReplyCodes {
     FriendRequestSend((byte) 0x0A),
     UserNotFound((byte) 0x0B),
     FriendRequestExists((byte) 0x0C),
+    FriendsFound((byte) 0x0D),
+    FriendsNotFound((byte) 0x0E),
 
     ;
     private byte value;

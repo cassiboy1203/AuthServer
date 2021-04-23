@@ -30,7 +30,7 @@ enum UserStatus {
         return null;
     }
 
-    public int getValue() {
+    public byte getValue() {
         return value;
     }
 }
@@ -56,7 +56,7 @@ enum UserRole {
         return null;
     }
 
-    public int getValue() {
+    public byte getValue() {
         return value;
     }
 }
@@ -128,7 +128,7 @@ public class User {
                         // the actions when not logged in.
                         if (!IsLoggedIn) {
                             // checks what action needs to be executed.
-                            switch (Objects.requireNonNull(action)) {
+                            switch (action) {
                                 case Login -> {
                                     // if a different status than online has been send.
                                     Status = messages.length > 2 ? UserStatus.fromValue(Byte.parseByte(messages[2])) : UserStatus.Online;
@@ -153,7 +153,7 @@ public class User {
                                         SendReply(ReplyCodes.InvalidAction.getValue());
                             }
                         } else {
-                            switch (Objects.requireNonNull(action)) {
+                            switch (action) {
                                 case Disconnect -> {
                                     SendReply(ReplyCodes.Confirm.getValue());
                                     return;
@@ -163,6 +163,9 @@ public class User {
                                 }
                                 case AddFriend -> {
                                     AddFriend(messages[0], messages[1]);
+                                }
+                                case GetFriends, GetFriendRequest -> {
+                                    GetFriends(action);
                                 }
                                 default ->
                                         // if the action send was not valid.
@@ -235,6 +238,23 @@ public class User {
         }
     }
 
+    private void GetFriends(ActionCodes action){
+        ArrayList<Friend> friends = null;
+        if (action == ActionCodes.GetFriends) friends = Database.GetFriends(Id);
+        else if (action == ActionCodes.GetFriendRequest) friends = Database.GetFriendRequests(Id);
+        if (friends != null){
+            ArrayList<byte[]> buffer = new ArrayList<>();
+            for (Friend friend : friends){
+                if (action == ActionCodes.GetFriends) buffer.add(BuildReplyMessage(friend.token, friend.Name, Byte.toString(friend.status.getValue())));
+                else if (action == ActionCodes.GetFriendRequest) buffer.add(BuildReplyMessage(friend.token, friend.Name, Integer.toString(friend.RequestInfo)));
+            }
+            byte[] message = BuildExtendedReplyMessage(buffer);
+            SendReply(ReplyCodes.FriendsFound.getValue(), message);
+        } else {
+            SendReply(ReplyCodes.FriendsNotFound.getValue());
+        }
+    }
+
     // sends back the reply code and a new authkey.
     private void SendReply(byte reply) {
         byte[] buffer = new byte[17];
@@ -243,17 +263,22 @@ public class User {
         SendReply(buffer);
     }
 
-    // sends back the reply code, extra arguments and a new authkey.
+    // converts the arguments into bytes
     private void SendReply(byte replyCode, String... args) {
-
         byte[] message = BuildReplyMessage(args);
+        SendReply(replyCode, message);
+    }
+
+    // sends back the reply code, message and a new authkey.
+    private void SendReply(byte reply, byte[] message){
         byte[] buffer = new byte[message.length + 21];
         byte[] messageLength = ToByteArray(message.length);
 
-        buffer[0] = replyCode;
+        buffer[0] = reply;
         System.arraycopy(GenerateAuthKey(), 0, buffer, 1, 16);
-        System.arraycopy(messageLength, 0, buffer, 17, 4);
-        System.arraycopy(message, 0, buffer, 21, message.length);
+        System.arraycopy(messageLength,0,buffer,17,4);
+        System.arraycopy(message,0,buffer,21,message.length);
+
         SendReply(buffer);
     }
 
@@ -261,7 +286,17 @@ public class User {
     private void SendReply(byte[] buffer) {
         try {
             OutputStream out = Client.getOutputStream();
-            out.write(buffer);
+            if (buffer.length > 1024){
+                int pointer = 0;
+                while (pointer < buffer.length){
+                    int messageLength = buffer.length - pointer > 1024 ? 1024 : buffer.length - pointer;
+                    byte[] splitBuffer = new byte[messageLength];
+                    System.arraycopy(buffer, pointer, splitBuffer, 0, messageLength);
+                    out.write(splitBuffer);
+                    pointer += messageLength;
+                }
+            }
+            else out.write(buffer);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -373,4 +408,35 @@ public class User {
 
         return buffer;
     }
+
+    private byte[] BuildExtendedReplyMessage(ArrayList<byte[]> messages){
+        int count = 0;
+        for (byte[] message : messages){
+            count += message.length + 4;
+        }
+
+        byte[] buffer = new byte[count];
+        int pointer = 0;
+        for (byte[] message : messages){
+            byte[] length = ToByteArray(message.length);
+            System.arraycopy(length, 0, buffer, pointer, 4);
+            System.arraycopy(message, 0, buffer, pointer + 4, message.length);
+
+            pointer += message.length + 4;
+        }
+
+        return buffer;
+    }
+}
+
+class Friend{
+    String token;
+    String Name;
+    String image;
+    UserStatus status;
+    int RequestInfo;
+}
+
+class Message{
+
 }

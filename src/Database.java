@@ -4,10 +4,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 public class Database {
     // connects to the database.
@@ -343,6 +340,96 @@ public class Database {
             }
         }
         return -1;
+    }
+
+    public static ArrayList<Friend> GetFriends(int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+        ArrayList<Friend> friends = new ArrayList<>();
+
+        try {
+            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE FriendId = u.UserId AND FriendId = ut.UserId AND f.UserId = ?");
+            pStatement.setInt(1, id);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Friend friend = new Friend();
+                friend.token = result.getString("UserToken");
+                friend.Name = result.getString("UserName");
+                friend.status = UserStatus.fromValue(result.getByte("UserStatus"));
+                //TODO: Get image.
+
+                friends.add(friend);
+            }
+
+            return friends;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public static ArrayList<Friend> GetFriendRequests(int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+        ArrayList<Friend> friends = new ArrayList<>();
+
+        try {
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND RequestStatus = 0");
+            pStatement.setInt(1, id);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Friend friend = new Friend();
+                friend.Name = result.getString("UserName");
+                friend.token = result.getString("UserToken");
+                friend.RequestInfo = 1;
+                //TODO: get image
+
+                friends.add(friend);
+            }
+
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserReceivedRequest AND ut.UserId = f.UserReceivedRequest AND f.UserSendRequest = ? AND RequestStatus <> 1");
+            pStatement.setInt(1, id);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Friend friend = new Friend();
+                friend.Name = result.getString("UserName");
+                friend.token = result.getString("UserToken");
+                friend.RequestInfo = result.getInt("RequestStatus");
+                //TODO: get image
+
+                friends.add(friend);
+            }
+
+            return friends;
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
     }
 
     private static final SecureRandom RAND = new SecureRandom();
