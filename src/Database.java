@@ -11,10 +11,10 @@ import java.util.Optional;
 
 public class Database {
     // connects to the database.
-    private static Connection ConnectToDatabase(boolean multipleQuerys) {
+    private static Connection ConnectToDatabase() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            return DriverManager.getConnection("jdbc:mysql://localhost/ChatServer?" + "user=root&password=&allowMultiQueries=" + multipleQuerys);
+            return DriverManager.getConnection("jdbc:mysql://localhost/ChatServer?" + "user=root&password=");
         } catch (SQLException | ClassNotFoundException throwables) {
             throwables.printStackTrace();
         }
@@ -23,7 +23,7 @@ public class Database {
 
     // adds a new user to the database.
     public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, UserStatus status) {
-        Connection con = ConnectToDatabase(true);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 
@@ -94,7 +94,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             // prepares the statement.
             assert con != null;
@@ -153,7 +153,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -205,7 +205,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -261,7 +261,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -290,6 +290,59 @@ public class Database {
         }
 
         return false;
+    }
+
+    // saves FriendRequest in database
+    public static int SendFriendRequest(int id, String userName, String friendCode){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            // gets the friend id.
+            pStatement = con.prepareStatement("SELECT * FROM Users WHERE UserName = ? AND FriendCode = ?");
+            pStatement.setString(1, userName);
+            pStatement.setString(2, friendCode);
+
+            // executes the statement
+            result = pStatement.executeQuery();
+
+            // reads the results
+            if (result.next()){
+                int friendId = result.getInt("UserId");
+
+                pStatement = con.prepareStatement("SELECT * FROM FriendRequests WHERE UserSendRequest = ? AND UserReceivedRequest = ?");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, friendId);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()){
+                    return 0;
+                }
+
+                // add the request to the database.
+                pStatement = con.prepareStatement("INSERT INTO FriendRequests(UserSendRequest, UserReceivedRequest) VALUES(?,?)");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, friendId);
+
+                pStatement.executeUpdate();
+
+                return 1;
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return -1;
     }
 
     private static final SecureRandom RAND = new SecureRandom();
@@ -352,7 +405,7 @@ public class Database {
     }
 
     private static boolean CheckTokenUnique(String token) {
-        Connection con = ConnectToDatabase(false);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 
@@ -396,7 +449,7 @@ public class Database {
     }
 
     private static boolean CheckUniqueFriendCode(String friendCode, String userName) {
-        Connection con = ConnectToDatabase(false);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 

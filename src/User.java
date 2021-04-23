@@ -73,6 +73,7 @@ public class User {
     public boolean IsLoggedIn;
     public String FriendCode;
     public String UserToken;
+    public int LastUpdateTime;
 
     public Socket Client;
     public byte[] AuthKey;
@@ -160,6 +161,9 @@ public class User {
                                 case Logout -> {
 
                                 }
+                                case AddFriend -> {
+                                    AddFriend(messages[0], messages[1]);
+                                }
                                 default ->
                                         // if the action send was not valid.
                                         SendReply(ReplyCodes.InvalidAction.getValue());
@@ -203,6 +207,7 @@ public class User {
     private void CheckLoginInfo(String loginToken, String userToken) {
         String ip = (((InetSocketAddress) Client.getRemoteSocketAddress()).getAddress()).toString().replace("/","");
         if (Database.CheckLoginInfo(loginToken, userToken, this, ip)) {
+            IsLoggedIn = true;
             SendReply(ReplyCodes.LoginSuccessful.getValue(), userToken, Name, Email, Integer.toString(Role.getValue()), FriendCode) ;
         } else {
             SendReply(ReplyCodes.LoginFailed.getValue());
@@ -217,6 +222,17 @@ public class User {
             SendReply(ReplyCodes.EmailInUse.getValue());
         }
         System.gc();
+    }
+
+    private void AddFriend(String userName, String friendCode){
+        int out = Database.SendFriendRequest(Id, userName, friendCode);
+        if (out == 1){
+            SendReply(ReplyCodes.FriendRequestSend.getValue());
+        } else if (out == 0){
+            SendReply(ReplyCodes.FriendRequestExists.getValue());
+        } else {
+            SendReply(ReplyCodes.UserNotFound.getValue());
+        }
     }
 
     // sends back the reply code and a new authkey.

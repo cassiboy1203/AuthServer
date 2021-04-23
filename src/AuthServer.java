@@ -14,6 +14,7 @@ enum ActionCodes {
     NewUser((byte) 0x04),
     Logout((byte) 0x05),
     Disconnect((byte) 0x06),
+    AddFriend((byte) 0x07),
 
     ;
 
@@ -49,6 +50,9 @@ enum ReplyCodes {
     EmailInUse((byte) 0x07),
     UserLoggedOut((byte) 0x08),
     Confirm((byte) 0x09),
+    FriendRequestSend((byte) 0x0A),
+    UserNotFound((byte) 0x0B),
+    FriendRequestExists((byte) 0x0C),
 
     ;
     private byte value;
