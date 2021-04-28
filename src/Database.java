@@ -4,17 +4,14 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 public class Database {
     // connects to the database.
-    private static Connection ConnectToDatabase(boolean multipleQuerys) {
+    private static Connection ConnectToDatabase() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            return DriverManager.getConnection("jdbc:mysql://localhost/ChatServer?" + "user=root&password=&allowMultiQueries=" + multipleQuerys);
+            return DriverManager.getConnection("jdbc:mysql://localhost/ChatServer?" + "user=root&password=");
         } catch (SQLException | ClassNotFoundException throwables) {
             throwables.printStackTrace();
         }
@@ -23,7 +20,7 @@ public class Database {
 
     // adds a new user to the database.
     public static boolean AddUserToDatabase(String name, String email, String pass, UserRole role, UserStatus status) {
-        Connection con = ConnectToDatabase(true);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 
@@ -94,7 +91,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             // prepares the statement.
             assert con != null;
@@ -153,7 +150,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -205,7 +202,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -261,7 +258,7 @@ public class Database {
         PreparedStatement pStatement = null;
 
         try {
-            con = ConnectToDatabase(false);
+            con = ConnectToDatabase();
 
             assert con != null;
             // prepares the statement.
@@ -289,6 +286,178 @@ public class Database {
             System.gc();
         }
 
+        return false;
+    }
+
+    // saves FriendRequest in database
+    public static int SendFriendRequest(int id, String userName, String friendCode){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            // gets the friend id.
+            pStatement = con.prepareStatement("SELECT * FROM Users WHERE UserName = ? AND FriendCode = ?");
+            pStatement.setString(1, userName);
+            pStatement.setString(2, friendCode);
+
+            // executes the statement
+            result = pStatement.executeQuery();
+
+            // reads the results
+            if (result.next()){
+                int friendId = result.getInt("UserId");
+
+                pStatement = con.prepareStatement("SELECT * FROM FriendRequests WHERE UserSendRequest = ? AND UserReceivedRequest = ?");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, friendId);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()){
+                    return 0;
+                }
+
+                // add the request to the database.
+                pStatement = con.prepareStatement("INSERT INTO FriendRequests(UserSendRequest, UserReceivedRequest) VALUES(?,?)");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, friendId);
+
+                pStatement.executeUpdate();
+
+                return 1;
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return -1;
+    }
+
+    public static ArrayList<Friend> GetFriends(int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+        ArrayList<Friend> friends = new ArrayList<>();
+
+        try {
+            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE FriendId = u.UserId AND FriendId = ut.UserId AND f.UserId = ?");
+            pStatement.setInt(1, id);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Friend friend = new Friend();
+                friend.token = result.getString("UserToken");
+                friend.Name = result.getString("UserName");
+                friend.status = UserStatus.fromValue(result.getByte("UserStatus"));
+                //TODO: Get image.
+
+                friends.add(friend);
+            }
+
+            return friends;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public static ArrayList<Friend> GetFriendRequests(int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+        ArrayList<Friend> friends = new ArrayList<>();
+
+        try {
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0");
+            pStatement.setInt(1, id);
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Friend friend = new Friend();
+                friend.Name = result.getString("UserName");
+                friend.token = result.getString("UserToken");
+                //TODO: get image
+
+                friends.add(friend);
+            }
+
+            return friends;
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public static boolean UpdateRequestStatus(ActionCodes action, String userToken, int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("UPDATE FriendRequests f, UserTokens ut SET f.RequestStatus = ? WHERE ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND ut.UserToken = ?");
+            pStatement.setInt(1, action == ActionCodes.AcceptRequest ? 1 : -1);
+            pStatement.setInt(2, id);
+            pStatement.setString(3, userToken);
+
+            pStatement.executeUpdate();
+
+            if (action == ActionCodes.AcceptRequest){
+                pStatement = con.prepareStatement("SELECT UserId From UserTokens WHERE UserToken = ?");
+                pStatement.setString(1, userToken);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()) {
+                    int friendId = result.getInt("UserId");
+
+                    pStatement = con.prepareStatement("INSERT INTO FriendList(UserId, FriendId) VALUES(?,?)");
+                    pStatement.setInt(1,id);
+                    pStatement.setInt(2,friendId);
+
+                    pStatement.executeUpdate();
+                }
+            }
+
+            return true;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
         return false;
     }
 
@@ -352,7 +521,7 @@ public class Database {
     }
 
     private static boolean CheckTokenUnique(String token) {
-        Connection con = ConnectToDatabase(false);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 
@@ -396,7 +565,7 @@ public class Database {
     }
 
     private static boolean CheckUniqueFriendCode(String friendCode, String userName) {
-        Connection con = ConnectToDatabase(false);
+        Connection con = ConnectToDatabase();
         ResultSet result = null;
         PreparedStatement pStatement = null;
 
