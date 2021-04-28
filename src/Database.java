@@ -386,7 +386,7 @@ public class Database {
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
-            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND RequestStatus = 0");
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0");
             pStatement.setInt(1, id);
 
             result = pStatement.executeQuery();
@@ -395,22 +395,6 @@ public class Database {
                 Friend friend = new Friend();
                 friend.Name = result.getString("UserName");
                 friend.token = result.getString("UserToken");
-                friend.RequestInfo = 1;
-                //TODO: get image
-
-                friends.add(friend);
-            }
-
-            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserReceivedRequest AND ut.UserId = f.UserReceivedRequest AND f.UserSendRequest = ? AND RequestStatus <> 1");
-            pStatement.setInt(1, id);
-
-            result = pStatement.executeQuery();
-
-            while (result.next()){
-                Friend friend = new Friend();
-                friend.Name = result.getString("UserName");
-                friend.token = result.getString("UserToken");
-                friend.RequestInfo = result.getInt("RequestStatus");
                 //TODO: get image
 
                 friends.add(friend);
@@ -430,6 +414,51 @@ public class Database {
             }
         }
         return null;
+    }
+
+    public static boolean UpdateRequestStatus(ActionCodes action, String userToken, int id){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("UPDATE FriendRequests f, UserTokens ut SET f.RequestStatus = ? WHERE ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND ut.UserToken = ?");
+            pStatement.setInt(1, action == ActionCodes.AcceptRequest ? 1 : -1);
+            pStatement.setInt(2, id);
+            pStatement.setString(3, userToken);
+
+            pStatement.executeUpdate();
+
+            if (action == ActionCodes.AcceptRequest){
+                pStatement = con.prepareStatement("SELECT UserId From UserTokens WHERE UserToken = ?");
+                pStatement.setString(1, userToken);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()) {
+                    int friendId = result.getInt("UserId");
+
+                    pStatement = con.prepareStatement("INSERT INTO FriendList(UserId, FriendId) VALUES(?,?)");
+                    pStatement.setInt(1,id);
+                    pStatement.setInt(2,friendId);
+
+                    pStatement.executeUpdate();
+                }
+            }
+
+            return true;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return false;
     }
 
     private static final SecureRandom RAND = new SecureRandom();

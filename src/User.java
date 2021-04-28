@@ -167,6 +167,9 @@ public class User {
                                 case GetFriends, GetFriendRequest -> {
                                     GetFriends(action);
                                 }
+                                case AcceptRequest, RejectRequest -> {
+                                    UpdateRequest(action, messages[0]);
+                                }
                                 default ->
                                         // if the action send was not valid.
                                         SendReply(ReplyCodes.InvalidAction.getValue());
@@ -242,16 +245,25 @@ public class User {
         ArrayList<Friend> friends = null;
         if (action == ActionCodes.GetFriends) friends = Database.GetFriends(Id);
         else if (action == ActionCodes.GetFriendRequest) friends = Database.GetFriendRequests(Id);
+
         if (friends != null){
             ArrayList<byte[]> buffer = new ArrayList<>();
             for (Friend friend : friends){
                 if (action == ActionCodes.GetFriends) buffer.add(BuildReplyMessage(friend.token, friend.Name, Byte.toString(friend.status.getValue())));
-                else if (action == ActionCodes.GetFriendRequest) buffer.add(BuildReplyMessage(friend.token, friend.Name, Integer.toString(friend.RequestInfo)));
+                else buffer.add(BuildReplyMessage(friend.token, friend.Name));
             }
             byte[] message = BuildExtendedReplyMessage(buffer);
             SendReply(ReplyCodes.FriendsFound.getValue(), message);
         } else {
             SendReply(ReplyCodes.FriendsNotFound.getValue());
+        }
+    }
+
+    private void UpdateRequest(ActionCodes action, String userToken){
+        if (Database.UpdateRequestStatus(action, userToken, Id)){
+            SendReply(ReplyCodes.Confirm.getValue());
+        } else {
+            SendReply(ReplyCodes.InvalidArgs.getValue());
         }
     }
 
@@ -434,7 +446,6 @@ class Friend{
     String Name;
     String image;
     UserStatus status;
-    int RequestInfo;
 }
 
 class Message{

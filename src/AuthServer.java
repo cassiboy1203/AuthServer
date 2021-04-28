@@ -17,6 +17,8 @@ enum ActionCodes {
     AddFriend((byte) 0x07),
     GetFriends((byte) 0x08),
     GetFriendRequest((byte) 0x09),
+    AcceptRequest((byte) 0x0A),
+    RejectRequest((byte) 0x0B),
 
     ;
 
