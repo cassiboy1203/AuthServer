@@ -351,7 +351,7 @@ public class Database {
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
-            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE f.FriendId = u.UserId AND f.FriendId = ut.UserId AND f.UserId = ? AND f.LastUpdate > ? OR u.LastUpdate > ?");
+            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE f.FriendId = u.UserId AND f.FriendId = ut.UserId AND f.UserId = ? AND (f.LastUpdate >= ? OR u.LastUpdate >= ?)");
             pStatement.setInt(1, id);
             pStatement.setInt(2, lastUpdateTime);
             pStatement.setInt(3, lastUpdateTime);
@@ -412,7 +412,7 @@ public class Database {
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
-            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0 AND f.LastUpdate > ? OR u.LastUpdate > ?");
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0 AND (f.LastUpdate >= ? OR u.LastUpdate >= ?)");
             pStatement.setInt(1, id);
             pStatement.setInt(2, lastUpdateTime);
             pStatement.setInt(3, lastUpdateTime);
@@ -502,7 +502,7 @@ public class Database {
         ResultSet result = null;
 
         try {
-            pStatement = con.prepareStatement("SELECT bul.*, ut.*, u.UserName FROM Users u, BlockedUsersList bul, UserTokens ut WHERE u.UserId = bul.BlockedUser AND ut.UserId = bul.BlockedUser AND bul.IsBlocked = 1 AND bul.UserId = ? AND LastUpdate > ?");
+            pStatement = con.prepareStatement("SELECT bul.*, ut.*, u.UserName FROM Users u, BlockedUsersList bul, UserTokens ut WHERE u.UserId = bul.BlockedUser AND ut.UserId = bul.BlockedUser AND bul.IsBlocked = 1 AND bul.UserId = ? AND bul.LastUpdate >= ?");
             pStatement.setInt(1,id);
             pStatement.setInt(2, lastUpdateTime);
 
