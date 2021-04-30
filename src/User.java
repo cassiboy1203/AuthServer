@@ -165,10 +165,31 @@ public class User {
                                     AddFriend(messages[0], messages[1]);
                                 }
                                 case GetFriends, GetFriendRequest -> {
-                                    GetFriends(action);
+                                    try {
+                                        int lastUpdate = Integer.parseInt(messages[0]);
+                                        GetFriends(action, lastUpdate);
+                                    } catch (NumberFormatException ex){
+                                        ex.printStackTrace();
+                                        SendReply(ReplyCodes.InvalidArgs.getValue());
+                                    }
                                 }
                                 case AcceptRequest, RejectRequest -> {
                                     UpdateRequest(action, messages[0]);
+                                }
+                                case GetBlockedUsers -> {
+                                    try {
+                                        int lastUpdate = Integer.parseInt(messages[0]);
+                                        GetBlockedUsers(lastUpdate);
+                                    } catch (NumberFormatException ex){
+                                        ex.printStackTrace();
+                                        SendReply(ReplyCodes.InvalidArgs.getValue());
+                                    }
+                                }
+                                case BlockUser -> {
+                                    BlockUser(messages[0]);
+                                }
+                                case UnblockUser -> {
+                                    UnBlockUser(messages[0]);
                                 }
                                 default ->
                                         // if the action send was not valid.
@@ -241,10 +262,10 @@ public class User {
         }
     }
 
-    private void GetFriends(ActionCodes action){
+    private void GetFriends(ActionCodes action, int lastUpdateTime){
         ArrayList<Friend> friends = null;
-        if (action == ActionCodes.GetFriends) friends = Database.GetFriends(Id);
-        else if (action == ActionCodes.GetFriendRequest) friends = Database.GetFriendRequests(Id);
+        if (action == ActionCodes.GetFriends) friends = Database.GetFriends(Id, lastUpdateTime);
+        else if (action == ActionCodes.GetFriendRequest) friends = Database.GetFriendRequests(Id, lastUpdateTime);
 
         if (friends != null){
             ArrayList<byte[]> buffer = new ArrayList<>();
@@ -259,8 +280,39 @@ public class User {
         }
     }
 
+    private void GetBlockedUsers(int lastUpdateTime){
+        ArrayList<Friend> blockedUsers = Database.GetBlockedUsers(Id, lastUpdateTime);
+
+        if (blockedUsers != null){
+            ArrayList<byte[]> buffer = new ArrayList<>();
+            for (Friend blockedUser: blockedUsers){
+                buffer.add(BuildReplyMessage(blockedUser.token, blockedUser.Name));
+            }
+            byte[] message = BuildExtendedReplyMessage(buffer);
+            SendReply(ReplyCodes.FriendsFound.getValue(), message);
+        } else {
+            SendReply(ReplyCodes.FriendsNotFound.getValue());
+        }
+    }
+
     private void UpdateRequest(ActionCodes action, String userToken){
         if (Database.UpdateRequestStatus(action, userToken, Id)){
+            SendReply(ReplyCodes.Confirm.getValue());
+        } else {
+            SendReply(ReplyCodes.InvalidArgs.getValue());
+        }
+    }
+
+    private void BlockUser(String userToken){
+        if (Database.BlockUser(Id, userToken)){
+            SendReply(ReplyCodes.Confirm.getValue());
+        } else {
+            SendReply(ReplyCodes.FriendRequestExists.getValue());
+        }
+    }
+
+    private void UnBlockUser(String userToken){
+        if (Database.UnBlockUser(Id, userToken)){
             SendReply(ReplyCodes.Confirm.getValue());
         } else {
             SendReply(ReplyCodes.InvalidArgs.getValue());

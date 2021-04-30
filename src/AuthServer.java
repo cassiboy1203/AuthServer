@@ -19,6 +19,9 @@ enum ActionCodes {
     GetFriendRequest((byte) 0x09),
     AcceptRequest((byte) 0x0A),
     RejectRequest((byte) 0x0B),
+    BlockUser((byte) 0x0C),
+    UnblockUser((byte) 0x0D),
+    GetBlockedUsers((byte) 0x0E),
 
     ;
 
