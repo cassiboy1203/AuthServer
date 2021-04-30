@@ -262,9 +262,10 @@ public class Database {
 
             assert con != null;
             // prepares the statement.
-            pStatement = con.prepareStatement("UPDATE Users SET UserStatus = ? WHERE UserId = ?");
+            pStatement = con.prepareStatement("UPDATE Users SET UserStatus = ?, LastUpdate = ? WHERE UserId = ?");
             pStatement.setInt(1, status.getValue());
-            pStatement.setInt(2, id);
+            pStatement.setInt(2, GetTimeStamp());
+            pStatement.setInt(3, id);
 
             // checks if it was successful.
             boolean returnValue = pStatement.executeUpdate() != 0;
@@ -319,9 +320,10 @@ public class Database {
                 }
 
                 // add the request to the database.
-                pStatement = con.prepareStatement("INSERT INTO FriendRequests(UserSendRequest, UserReceivedRequest) VALUES(?,?)");
+                pStatement = con.prepareStatement("INSERT INTO FriendRequests(UserSendRequest, UserReceivedRequest, LastUpdateTime) VALUES(?,?,?)");
                 pStatement.setInt(1, id);
                 pStatement.setInt(2, friendId);
+                pStatement.setInt(3,GetTimeStamp());
 
                 pStatement.executeUpdate();
 
@@ -342,15 +344,17 @@ public class Database {
         return -1;
     }
 
-    public static ArrayList<Friend> GetFriends(int id){
+    public static ArrayList<Friend> GetFriends(int id, int lastUpdateTime){
         Connection con = ConnectToDatabase();
         PreparedStatement pStatement = null;
         ResultSet result = null;
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
-            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE FriendId = u.UserId AND FriendId = ut.UserId AND f.UserId = ?");
+            pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE f.FriendId = u.UserId AND f.FriendId = ut.UserId AND f.UserId = ? AND f.LastUpdate > ? OR u.LastUpdate > ?");
             pStatement.setInt(1, id);
+            pStatement.setInt(2, lastUpdateTime);
+            pStatement.setInt(3, lastUpdateTime);
 
             result = pStatement.executeQuery();
 
@@ -364,7 +368,29 @@ public class Database {
                 friends.add(friend);
             }
 
-            return friends;
+            ArrayList<Friend> friendList = new ArrayList<>();
+            for (Friend friend : friends){
+                pStatement = con.prepareStatement("SELECT (bul.UserId = ? AND bul.BlockedUser = ut.UserId AND bul.IsBlocked = 1) OR (bul.UserId = ut.UserId AND bul.BlockedUser = ? AND bul.IsBlocked = 1) as IsBlocked FROM BlockedUsersList bul, UserTokens ut WHERE ut.UserToken = ?");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, id);
+                pStatement.setString(3, friend.token);
+
+                result = pStatement.executeQuery();
+
+                boolean isBlocked = false;
+                while (result.next()){
+                    if (result.getBoolean("IsBlocked")){
+                        isBlocked = true;
+                        break;
+                    }
+                }
+                if (!isBlocked){
+                    friendList.add(friend);
+                }
+            }
+
+            if (friendList.isEmpty()) return null;
+            return friendList;
         } catch (SQLException throwables) {
             throwables.printStackTrace();
         } finally {
@@ -379,15 +405,17 @@ public class Database {
         return null;
     }
 
-    public static ArrayList<Friend> GetFriendRequests(int id){
+    public static ArrayList<Friend> GetFriendRequests(int id, int lastUpdateTime){
         Connection con = ConnectToDatabase();
         PreparedStatement pStatement = null;
         ResultSet result = null;
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
-            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0");
+            pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0 AND f.LastUpdate > ? OR u.LastUpdate > ?");
             pStatement.setInt(1, id);
+            pStatement.setInt(2, lastUpdateTime);
+            pStatement.setInt(3, lastUpdateTime);
 
             result = pStatement.executeQuery();
 
@@ -422,10 +450,11 @@ public class Database {
         ResultSet result = null;
 
         try {
-            pStatement = con.prepareStatement("UPDATE FriendRequests f, UserTokens ut SET f.RequestStatus = ? WHERE ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND ut.UserToken = ?");
+            pStatement = con.prepareStatement("UPDATE FriendRequests f, UserTokens ut SET f.RequestStatus = ?, f.LastUpdate = ? WHERE ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND ut.UserToken = ?");
             pStatement.setInt(1, action == ActionCodes.AcceptRequest ? 1 : -1);
-            pStatement.setInt(2, id);
-            pStatement.setString(3, userToken);
+            pStatement.setInt(2, GetTimeStamp());
+            pStatement.setInt(3, id);
+            pStatement.setString(4, userToken);
 
             pStatement.executeUpdate();
 
@@ -438,9 +467,15 @@ public class Database {
                 if (result.next()) {
                     int friendId = result.getInt("UserId");
 
-                    pStatement = con.prepareStatement("INSERT INTO FriendList(UserId, FriendId) VALUES(?,?)");
+                    pStatement = con.prepareStatement("INSERT INTO FriendList(UserId, FriendId, LastUpdate) VALUES(?,?,?)");
                     pStatement.setInt(1,id);
                     pStatement.setInt(2,friendId);
+
+                    pStatement.executeUpdate();
+
+                    pStatement = con.prepareStatement("INSERT INTO FriendList(UserId, FriendId, LastUpdate) VALUES(?,?,?)");
+                    pStatement.setInt(2,id);
+                    pStatement.setInt(1,friendId);
 
                     pStatement.executeUpdate();
                 }
@@ -459,6 +494,129 @@ public class Database {
             }
         }
         return false;
+    }
+
+    public static ArrayList<Friend> GetBlockedUsers(int id, int lastUpdateTime){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("SELECT bul.*, ut.*, u.UserName FROM Users u, BlockedUsersList bul, UserTokens ut WHERE u.UserId = bul.BlockedUser AND ut.UserId = bul.BlockedUser AND bul.IsBlocked = 1 AND bul.UserId = ? AND LastUpdate > ?");
+            pStatement.setInt(1,id);
+            pStatement.setInt(2, lastUpdateTime);
+
+            result = pStatement.executeQuery();
+
+            ArrayList<Friend> blockedUsers = new ArrayList<>();
+            while (result.next()){
+                Friend blockedUser = new Friend();
+                blockedUser.token = result.getString("UserToken");
+                blockedUser.Name = result.getString("UserName");
+                //TODO: get user image
+
+                blockedUsers.add(blockedUser);
+            }
+
+            return blockedUsers;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public static boolean BlockUser(int id, String UserToken){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("SELECT UserId FROM UserTokens WHERE UserToken = ?");
+            pStatement.setString(1, UserToken);
+
+            result = pStatement.executeQuery();
+
+            if (result.next()){
+                int blockId  = result.getInt("UserId");
+
+                pStatement = con.prepareStatement("SELECT IsBlocked FROM BlockedUsersList WHERE UserId = ? AND BlockedUser = ? AND IsBlocked = 1");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, blockId);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()) return false;
+
+                pStatement = con.prepareStatement("INSERT INTO blockeduserslist(UserId, BlockedUser, LastUpdate) VALUES (?,?,?)");
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, blockId);
+                pStatement.setInt(3, GetTimeStamp());
+
+                pStatement.executeUpdate();
+
+                return true;
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return false;
+    }
+
+    public static boolean UnBlockUser(int id, String UserToken){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("SELECT UserId FROM UserTokens WHERE UserToken = ?");
+            pStatement.setString(1, UserToken);
+
+            result = pStatement.executeQuery();
+
+            if (result.next()){
+                int blockId  = result.getInt("UserId");
+
+                pStatement = con.prepareStatement("UPDATE BlockedUsersList SET IsBlocked = 0, LastUpdate = ? WHERE Userid = ? AND BlockedUser = ?");
+                pStatement.setInt(1, GetTimeStamp());
+                pStatement.setInt(2, id);
+                pStatement.setInt(3, blockId);
+
+                pStatement.executeUpdate();
+
+                return true;
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return false;
+    }
+
+    private static int GetTimeStamp(){
+        return Long.valueOf(System.currentTimeMillis() / 1000L).intValue();
     }
 
     private static final SecureRandom RAND = new SecureRandom();
