@@ -663,6 +663,61 @@ public class Database {
         return false;
     }
 
+    public static ArrayList<Message> ReadMessages(int channelId, String userToken, int id, boolean isPrivate, int lastUpdateTime){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        ArrayList<Message> messages = new ArrayList<>();
+
+        try {
+            int userReceived = 0;
+            if (isPrivate) {
+                pStatement = con.prepareStatement("SELECT * FROM UserTokens WHERE UserToken = ?");
+                pStatement.setString(1, userToken);
+
+                result = pStatement.executeQuery();
+
+                if (result.next()){
+                    userReceived = result.getInt("UserId");
+                }
+            }
+            pStatement = con.prepareStatement(isPrivate ? "SELECT * FROM Messages WHERE UserSend = ? AND UserReceived = ? AND DateSend > ? ORDER BY DateSend ASC" : "SELECT * From Messages WHERE ChannelId = ? AND DateSend > ? ORDER BY DateSend ASC");
+            if (isPrivate){
+                pStatement.setInt(1, id);
+                pStatement.setInt(2, userReceived);
+                pStatement.setInt(3, lastUpdateTime);
+            } else {
+                pStatement.setInt(1, channelId);
+                pStatement.setInt(2, lastUpdateTime);
+            }
+
+            result = pStatement.executeQuery();
+
+            while (result.next()){
+                Message message = new Message();
+                message.Text = result.getString("MessageText");
+                message.Date = result.getInt("DateSend");
+                message.Type = result.getInt("MessageType");
+
+                messages.add(message);
+            }
+
+            return messages;
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return null;
+    }
+
     private static int GetTimeStamp(){
         return Long.valueOf(System.currentTimeMillis() / 1000L).intValue();
     }

@@ -194,6 +194,9 @@ public class User {
                                 case SendPrivateMessage -> {
                                     SendPrivateMessage(messages[0], messages[1]);
                                 }
+                                case ReadPrivateMessage -> {
+                                    GetPrivateMessages(messages[0], Integer.getInteger(messages[1]));
+                                }
                                 default ->
                                         // if the action send was not valid.
                                         SendReply(ReplyCodes.InvalidAction.getValue());
@@ -325,6 +328,20 @@ public class User {
     private void SendPrivateMessage(String text, String userToken){
         if (Database.SaveMessage(text, true, 0, Id, userToken)){
             SendReply(ReplyCodes.MessageReceived.getValue());
+        } else {
+            SendReply(ReplyCodes.InvalidArgs.getValue());
+        }
+    }
+
+    private void GetPrivateMessages(String userToken, int lastUpdateTime){
+        ArrayList<Message> messages = Database.ReadMessages(0, userToken, Id, true, lastUpdateTime);
+        if (messages != null){
+            ArrayList<byte[]> buffer = new ArrayList<>();
+            for (Message message : messages){
+                buffer.add(BuildReplyMessage(message.Text, Integer.toString(message.Date), Integer.toString(message.Type)));
+            }
+            byte[] message = BuildExtendedReplyMessage(buffer);
+            SendReply(ReplyCodes.Confirm.getValue(), message);
         } else {
             SendReply(ReplyCodes.InvalidArgs.getValue());
         }
@@ -512,5 +529,7 @@ class Friend{
 }
 
 class Message{
-
+    String Text;
+    int Date;
+    int Type;
 }

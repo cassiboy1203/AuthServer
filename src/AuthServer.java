@@ -23,6 +23,7 @@ enum ActionCodes {
     UnblockUser((byte) 0x0D),
     GetBlockedUsers((byte) 0x0E),
     SendPrivateMessage((byte) 0x0F),
+    ReadPrivateMessage((byte) 0x10),
 
     ;
 
