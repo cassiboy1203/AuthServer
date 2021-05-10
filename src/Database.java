@@ -298,6 +298,7 @@ public class Database {
 
         try {
             // gets the friend id.
+            assert con != null;
             pStatement = con.prepareStatement("SELECT * FROM Users WHERE UserName = ? AND FriendCode = ?");
             pStatement.setString(1, userName);
             pStatement.setString(2, friendCode);
@@ -351,6 +352,7 @@ public class Database {
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("SELECT u.*, ut.UserToken FROM Users u, FriendList f, UserTokens ut WHERE f.FriendId = u.UserId AND f.FriendId = ut.UserId AND f.UserId = ? AND (f.LastUpdate >= ? OR u.LastUpdate >= ?)");
             pStatement.setInt(1, id);
             pStatement.setInt(2, lastUpdateTime);
@@ -412,6 +414,7 @@ public class Database {
         ArrayList<Friend> friends = new ArrayList<>();
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("SELECT * FROM FriendRequests f, Users u, UserTokens ut WHERE u.UserId = f.UserSendRequest AND ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND f.RequestStatus = 0 AND (f.LastUpdate >= ? OR u.LastUpdate >= ?)");
             pStatement.setInt(1, id);
             pStatement.setInt(2, lastUpdateTime);
@@ -450,6 +453,7 @@ public class Database {
         ResultSet result = null;
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("UPDATE FriendRequests f, UserTokens ut SET f.RequestStatus = ?, f.LastUpdate = ? WHERE ut.UserId = f.UserSendRequest AND f.UserReceivedRequest = ? AND ut.UserToken = ?");
             pStatement.setInt(1, action == ActionCodes.AcceptRequest ? 1 : -1);
             pStatement.setInt(2, GetTimeStamp());
@@ -502,6 +506,7 @@ public class Database {
         ResultSet result = null;
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("SELECT bul.*, ut.*, u.UserName FROM Users u, BlockedUsersList bul, UserTokens ut WHERE u.UserId = bul.BlockedUser AND ut.UserId = bul.BlockedUser AND bul.IsBlocked = 1 AND bul.UserId = ? AND bul.LastUpdate >= ?");
             pStatement.setInt(1,id);
             pStatement.setInt(2, lastUpdateTime);
@@ -539,6 +544,7 @@ public class Database {
         ResultSet result = null;
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("SELECT UserId FROM UserTokens WHERE UserToken = ?");
             pStatement.setString(1, UserToken);
 
@@ -584,6 +590,7 @@ public class Database {
         ResultSet result = null;
 
         try {
+            assert con != null;
             pStatement = con.prepareStatement("SELECT UserId FROM UserTokens WHERE UserToken = ?");
             pStatement.setString(1, UserToken);
 
@@ -596,6 +603,47 @@ public class Database {
                 pStatement.setInt(1, GetTimeStamp());
                 pStatement.setInt(2, id);
                 pStatement.setInt(3, blockId);
+
+                pStatement.executeUpdate();
+
+                return true;
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
+            try {
+                if (result != null) result.close();
+                if (pStatement != null) pStatement.close();
+                if (con != null) con.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return false;
+    }
+
+    public static boolean SaveMessage(String text, boolean IsPrivate, int channelId, int userSend, String userToken){
+        Connection con = ConnectToDatabase();
+        PreparedStatement pStatement = null;
+        ResultSet result = null;
+
+        try {
+            pStatement = con.prepareStatement("SELECT * FROM UserTokens WHERE UserToken = ?");
+            pStatement.setString(1, userToken);
+
+            result = pStatement.executeQuery();
+
+            if (result.next()){
+                int userReceived = result.getInt("UserId");
+
+                pStatement = con.prepareStatement("INSERT INTO Messages(MessageText, DateSend, IsPrivate, ChannelId, UserSend, UserReceived, MessageType) VALUES(?,?,?,?,?,?,?)");
+                pStatement.setString(1,text);
+                pStatement.setInt(2, GetTimeStamp());
+                pStatement.setInt(3, IsPrivate ? 1 : 0);
+                pStatement.setInt(4, channelId);
+                pStatement.setInt(5, userSend);
+                pStatement.setInt(6, userReceived);
+                pStatement.setInt(7, 0);
 
                 pStatement.executeUpdate();
 
@@ -711,7 +759,7 @@ public class Database {
 
     private static Optional<String> GenerateFriendCode(String name) {
         while (true) {
-            int token = 0;
+            int token;
             token = RAND.nextInt(9999) + 1;
 
             Optional<String> tokenString = Optional.of(Integer.toString(token));

@@ -22,6 +22,7 @@ enum ActionCodes {
     BlockUser((byte) 0x0C),
     UnblockUser((byte) 0x0D),
     GetBlockedUsers((byte) 0x0E),
+    SendPrivateMessage((byte) 0x0F),
 
     ;
 
@@ -62,6 +63,8 @@ enum ReplyCodes {
     FriendRequestExists((byte) 0x0C),
     FriendsFound((byte) 0x0D),
     FriendsNotFound((byte) 0x0E),
+    MessageReceived((byte) 0x0F),
+
 
     ;
     private byte value;

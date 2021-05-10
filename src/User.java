@@ -191,6 +191,9 @@ public class User {
                                 case UnblockUser -> {
                                     UnBlockUser(messages[0]);
                                 }
+                                case SendPrivateMessage -> {
+                                    SendPrivateMessage(messages[0], messages[1]);
+                                }
                                 default ->
                                         // if the action send was not valid.
                                         SendReply(ReplyCodes.InvalidAction.getValue());
@@ -314,6 +317,14 @@ public class User {
     private void UnBlockUser(String userToken){
         if (Database.UnBlockUser(Id, userToken)){
             SendReply(ReplyCodes.Confirm.getValue());
+        } else {
+            SendReply(ReplyCodes.InvalidArgs.getValue());
+        }
+    }
+
+    private void SendPrivateMessage(String text, String userToken){
+        if (Database.SaveMessage(text, true, 0, Id, userToken)){
+            SendReply(ReplyCodes.MessageReceived.getValue());
         } else {
             SendReply(ReplyCodes.InvalidArgs.getValue());
         }
